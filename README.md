@@ -80,7 +80,4 @@ POST `http://127.0.0.1:8000/ingest`
 }
 ```
 
-## Suggested GitHub repo naming
-
-- **Name:** `sentinelflow-aiops`
-- **Description:** `Realtime Agentic AIOps platform with LangGraph, LangChain, PyTorch, TensorFlow, and FastAPI for incident triage and decision streaming.`
+# Sharan G S
