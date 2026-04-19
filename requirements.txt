@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+websockets
+pydantic
+python-dotenv
+langchain
+langgraph
+langchain-openai
+torch
+tensorflow
+numpy
+pandas
+streamlit
+websocket-client
+httpx
+pytest
