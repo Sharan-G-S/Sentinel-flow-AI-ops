@@ -51,7 +51,12 @@ async def ingest_event(event: TelemetryEvent):
         decision=decision,
         route=state["route"],
     )
-    await hub.broadcast(response.model_dump(mode="json"))
+    payload = response.model_dump(mode="json")
+    emitted, suppression_reason = hub.should_emit(payload)
+    response.emitted = emitted
+    response.suppression_reason = suppression_reason
+    if emitted:
+        await hub.broadcast(payload)
     return response
 
 

@@ -24,3 +24,5 @@ class InferenceResponse(BaseModel):
     risk_score: float
     decision: AgentDecision
     route: List[str]
+    emitted: bool = True
+    suppression_reason: str | None = None
