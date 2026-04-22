@@ -47,4 +47,11 @@ if st.button("Connect Live Feed"):
 st.write(f"Connected: `{st.session_state.connected}`")
 
 for msg in st.session_state.messages[:20]:
+    explainability = msg.get("explainability", {})
+    if explainability:
+        st.markdown(
+            f"**{msg['event']['service']}** | risk=`{msg.get('risk_score', 0):.3f}` | "
+            f"band=`{explainability.get('risk_band', 'n/a')}` | trend=`{explainability.get('trend', 'n/a')}`"
+        )
+        st.caption(f"Top signals: {', '.join(explainability.get('top_signals', []))}")
     st.json(msg)

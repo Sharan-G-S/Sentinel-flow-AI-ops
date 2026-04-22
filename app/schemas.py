@@ -18,11 +18,19 @@ class AgentDecision(BaseModel):
     confidence: float
 
 
+class Explainability(BaseModel):
+    risk_band: str
+    trend: str
+    top_signals: List[str]
+    contributing_factors: Dict[str, float]
+
+
 class InferenceResponse(BaseModel):
     event: TelemetryEvent
     anomaly_score: float
     risk_score: float
     decision: AgentDecision
+    explainability: Explainability
     route: List[str]
     emitted: bool = True
     suppression_reason: str | None = None
