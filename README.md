@@ -82,4 +82,20 @@ POST `http://127.0.0.1:8000/ingest`
 }
 ```
 
+## Additional APIs
+
+- `GET /system/status` -> uptime, client connections, total processed events.
+- `GET /alerts/recent?limit=20&service=payments&emitted=true` -> filtered timeline.
+- `GET /analytics/summary` -> global suppression and throughput metrics.
+- `GET /analytics/service/{service}` -> service-specific averages and suppression.
+- `GET /analytics/severity/{severity}` -> severity-level delivery metrics.
+- `POST /analytics/reset` -> clears rolling analytics history/counters.
+
+## Extra environment controls
+
+- `RISK_HIGH_THRESHOLD`, `RISK_MEDIUM_THRESHOLD`
+- `DEDUP_HIGH_COOLDOWN_SEC`, `DEDUP_MEDIUM_COOLDOWN_SEC`, `DEDUP_LOW_COOLDOWN_SEC`
+- `EVENT_HISTORY_SIZE`
+- `SIM_SERVICES`, `SIM_INTERVAL_SECONDS`
+
 # Sharan G S
