@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import random
 from datetime import datetime, timezone
 import httpx
 
 
 API_URL = "http://127.0.0.1:8000/ingest"
-SERVICES = ["checkout", "payments", "inventory", "auth"]
+SERVICES = os.getenv("SIM_SERVICES", "checkout,payments,inventory,auth").split(",")
+INTERVAL_SECONDS = float(os.getenv("SIM_INTERVAL_SECONDS", "2"))
 
 
 async def push_event(client: httpx.AsyncClient, service: str):
@@ -37,7 +39,7 @@ async def run():
     async with httpx.AsyncClient() as client:
         while True:
             await asyncio.gather(*(push_event(client, s) for s in SERVICES))
-            await asyncio.sleep(2)
+            await asyncio.sleep(INTERVAL_SECONDS)
 
 
 if __name__ == "__main__":
