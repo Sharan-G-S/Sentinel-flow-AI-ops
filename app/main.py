@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from app.schemas import TelemetryEvent, InferenceResponse, AgentDecision, Explainability
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from app.schemas import TelemetryEvent, InferenceResponse, AgentDecision, Explainability, EventRecord
 from app.models.tf_anomaly import TensorFlowAnomalyDetector
 from app.models.pytorch_risk import PyTorchRiskModel
 from app.services.event_bus import hub
@@ -57,6 +57,11 @@ def build_explainability(
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/alerts/recent", response_model=list[EventRecord])
+def recent_alerts(limit: int = Query(default=20, ge=1, le=200)):
+    return list(hub.recent_events)[:limit]
 
 
 @app.post("/ingest", response_model=InferenceResponse)

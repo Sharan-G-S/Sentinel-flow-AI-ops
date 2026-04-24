@@ -34,3 +34,15 @@ class InferenceResponse(BaseModel):
     route: List[str]
     emitted: bool = True
     suppression_reason: str | None = None
+
+
+class EventRecord(BaseModel):
+    recorded_at: str
+    service: str
+    metric_name: str
+    metric_value: float
+    risk_score: float
+    anomaly_score: float
+    severity: str
+    emitted: bool
+    suppression_reason: str | None = None
