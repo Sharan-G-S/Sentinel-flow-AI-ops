@@ -54,12 +54,12 @@ class RealtimeHub:
         if risk_score >= 0.9:
             return True, None
 
-        if risk_score >= 0.7:
-            cooldown_seconds = 12
-        elif risk_score >= 0.4:
-            cooldown_seconds = 25
+        if risk_score >= settings.risk_high_threshold:
+            cooldown_seconds = settings.dedup_high_cooldown_sec
+        elif risk_score >= settings.risk_medium_threshold:
+            cooldown_seconds = settings.dedup_medium_cooldown_sec
         else:
-            cooldown_seconds = 45
+            cooldown_seconds = settings.dedup_low_cooldown_sec
 
         signature = f"{service}:{metric_name}:{severity}:{action}".lower()
         now = datetime.now(timezone.utc)
