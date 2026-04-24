@@ -78,3 +78,8 @@ class SeverityAnalytics(BaseModel):
     events: int
     emitted: int
     suppressed: int
+
+
+class ResetResponse(BaseModel):
+    ok: bool
+    message: str

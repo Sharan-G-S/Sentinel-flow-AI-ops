@@ -12,6 +12,7 @@ from app.schemas import (
     ServiceAnalytics,
     SystemStatus,
     SeverityAnalytics,
+    ResetResponse,
 )
 from app.models.tf_anomaly import TensorFlowAnomalyDetector
 from app.models.pytorch_risk import PyTorchRiskModel
@@ -151,6 +152,12 @@ def analytics_for_severity(severity: str):
         emitted=emitted,
         suppressed=len(entries) - emitted,
     )
+
+
+@app.post("/analytics/reset", response_model=ResetResponse)
+def reset_analytics():
+    hub.reset_analytics()
+    return ResetResponse(ok=True, message="analytics counters and history reset")
 
 
 @app.post("/ingest", response_model=InferenceResponse)

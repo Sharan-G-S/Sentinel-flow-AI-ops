@@ -99,5 +99,12 @@ class RealtimeHub:
         }
         self.recent_events.appendleft(entry)
 
+    def reset_analytics(self) -> None:
+        self.recent_events.clear()
+        self.total_events = 0
+        self.emitted_events = 0
+        self.suppressed_events = 0
+        self.last_emitted_by_signature.clear()
+
 
 hub = RealtimeHub()
