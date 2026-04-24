@@ -11,6 +11,7 @@ from app.schemas import (
     AnalyticsSummary,
     ServiceAnalytics,
     SystemStatus,
+    SeverityAnalytics,
 )
 from app.models.tf_anomaly import TensorFlowAnomalyDetector
 from app.models.pytorch_risk import PyTorchRiskModel
@@ -132,6 +133,23 @@ def analytics_for_service(service: str):
         suppression_rate=round(suppressed / len(entries), 4),
         average_risk_score=round(sum(float(e["risk_score"]) for e in entries) / len(entries), 4),
         average_anomaly_score=round(sum(float(e["anomaly_score"]) for e in entries) / len(entries), 4),
+    )
+
+
+@app.get("/analytics/severity/{severity}", response_model=SeverityAnalytics)
+def analytics_for_severity(severity: str):
+    normalized = severity.lower()
+    entries = [
+        entry
+        for entry in hub.recent_events
+        if str(entry.get("severity", "unknown")).lower() == normalized
+    ]
+    emitted = sum(1 for entry in entries if entry["emitted"])
+    return SeverityAnalytics(
+        severity=normalized,
+        events=len(entries),
+        emitted=emitted,
+        suppressed=len(entries) - emitted,
     )
 
 

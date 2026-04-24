@@ -71,3 +71,10 @@ class SystemStatus(BaseModel):
     uptime_seconds: int
     connected_clients: int
     total_events: int
+
+
+class SeverityAnalytics(BaseModel):
+    severity: str
+    events: int
+    emitted: int
+    suppressed: int
