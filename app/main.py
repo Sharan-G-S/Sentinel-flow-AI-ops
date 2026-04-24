@@ -17,9 +17,9 @@ risk_model = PyTorchRiskModel()
 def build_explainability(
     metric_value: float, anomaly_score: float, risk_score: float, error_rate: float, window: list[float]
 ) -> Explainability:
-    if risk_score >= 0.8:
+    if risk_score >= settings.risk_high_threshold:
         risk_band = "high"
-    elif risk_score >= 0.5:
+    elif risk_score >= settings.risk_medium_threshold:
         risk_band = "medium"
     else:
         risk_band = "low"
