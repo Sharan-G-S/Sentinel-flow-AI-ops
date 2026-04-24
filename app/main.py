@@ -82,8 +82,17 @@ def system_status():
 
 
 @app.get("/alerts/recent", response_model=list[EventRecord])
-def recent_alerts(limit: int = Query(default=20, ge=1, le=200)):
-    return list(hub.recent_events)[:limit]
+def recent_alerts(
+    limit: int = Query(default=20, ge=1, le=200),
+    service: str | None = Query(default=None),
+    emitted: bool | None = Query(default=None),
+):
+    events = list(hub.recent_events)
+    if service:
+        events = [entry for entry in events if entry["service"] == service]
+    if emitted is not None:
+        events = [entry for entry in events if bool(entry["emitted"]) == emitted]
+    return events[:limit]
 
 
 @app.get("/analytics/summary", response_model=AnalyticsSummary)
