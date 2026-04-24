@@ -103,6 +103,7 @@ async def ingest_event(event: TelemetryEvent):
     emitted, suppression_reason = hub.should_emit(payload)
     response.emitted = emitted
     response.suppression_reason = suppression_reason
+    hub.record_event(payload, emitted=emitted, suppression_reason=suppression_reason)
     if emitted:
         await hub.broadcast(payload)
     return response

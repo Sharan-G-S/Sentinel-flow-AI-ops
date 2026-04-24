@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from datetime import datetime, timezone
-from typing import Deque, Dict, Set
+from typing import Any, Deque, Dict, Set
+
+from app.config import settings
 
 
 class RealtimeHub:
@@ -11,6 +13,10 @@ class RealtimeHub:
         self.clients: Set = set()
         self.metric_windows: Dict[str, Deque[float]] = {}
         self.last_emitted_by_signature: Dict[str, datetime] = {}
+        self.recent_events: Deque[Dict[str, Any]] = deque(maxlen=settings.event_history_size)
+        self.total_events: int = 0
+        self.emitted_events: int = 0
+        self.suppressed_events: int = 0
         self.lock = asyncio.Lock()
 
     def get_window(self, service: str, size: int = 8) -> Deque[float]:
@@ -72,6 +78,26 @@ class RealtimeHub:
 
         self.last_emitted_by_signature[signature] = now
         return True, None
+
+    def record_event(self, payload: dict, emitted: bool, suppression_reason: str | None) -> None:
+        self.total_events += 1
+        if emitted:
+            self.emitted_events += 1
+        else:
+            self.suppressed_events += 1
+
+        entry = {
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+            "service": payload.get("event", {}).get("service", "unknown"),
+            "metric_name": payload.get("event", {}).get("metric_name", "unknown"),
+            "metric_value": payload.get("event", {}).get("metric_value", 0.0),
+            "risk_score": payload.get("risk_score", 0.0),
+            "anomaly_score": payload.get("anomaly_score", 0.0),
+            "severity": payload.get("decision", {}).get("severity", "unknown"),
+            "emitted": emitted,
+            "suppression_reason": suppression_reason,
+        }
+        self.recent_events.appendleft(entry)
 
 
 hub = RealtimeHub()
