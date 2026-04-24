@@ -63,6 +63,13 @@ c1.metric("Total Events", summary.get("total_events", 0))
 c2.metric("Suppression Rate", f"{summary.get('suppression_rate', 0.0) * 100:.1f}%")
 c3.metric("Active Services", summary.get("active_services", 0))
 
+system_status = fetch_json("/system/status")
+if system_status:
+    st.caption(
+        f"Uptime: {system_status.get('uptime_seconds', 0)}s | "
+        f"Connected clients: {system_status.get('connected_clients', 0)}"
+    )
+
 service_input = st.text_input("Service drilldown", value="payments")
 service_analytics = fetch_json(f"/analytics/service/{service_input}")
 if service_analytics:
@@ -73,6 +80,8 @@ if service_analytics:
     )
 
 severity_filter = st.selectbox("Severity filter", options=["all", "critical", "high", "medium", "low"])
+if st.button("Refresh Dashboard"):
+    st.rerun()
 for msg in st.session_state.messages[:30]:
     current_severity = str(msg.get("decision", {}).get("severity", "unknown")).lower()
     if severity_filter != "all" and current_severity != severity_filter:
