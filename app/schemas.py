@@ -54,3 +54,13 @@ class AnalyticsSummary(BaseModel):
     suppressed_events: int
     suppression_rate: float
     active_services: int
+
+
+class ServiceAnalytics(BaseModel):
+    service: str
+    events: int
+    emitted: int
+    suppressed: int
+    suppression_rate: float
+    average_risk_score: float
+    average_anomaly_score: float

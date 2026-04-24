@@ -8,6 +8,7 @@ from app.schemas import (
     Explainability,
     EventRecord,
     AnalyticsSummary,
+    ServiceAnalytics,
 )
 from app.models.tf_anomaly import TensorFlowAnomalyDetector
 from app.models.pytorch_risk import PyTorchRiskModel
@@ -81,6 +82,33 @@ def analytics_summary():
         suppressed_events=hub.suppressed_events,
         suppression_rate=round(hub.suppressed_events / total, 4),
         active_services=len(services),
+    )
+
+
+@app.get("/analytics/service/{service}", response_model=ServiceAnalytics)
+def analytics_for_service(service: str):
+    entries = [entry for entry in hub.recent_events if entry["service"] == service]
+    if not entries:
+        return ServiceAnalytics(
+            service=service,
+            events=0,
+            emitted=0,
+            suppressed=0,
+            suppression_rate=0.0,
+            average_risk_score=0.0,
+            average_anomaly_score=0.0,
+        )
+
+    emitted = sum(1 for entry in entries if entry["emitted"])
+    suppressed = len(entries) - emitted
+    return ServiceAnalytics(
+        service=service,
+        events=len(entries),
+        emitted=emitted,
+        suppressed=suppressed,
+        suppression_rate=round(suppressed / len(entries), 4),
+        average_risk_score=round(sum(float(e["risk_score"]) for e in entries) / len(entries), 4),
+        average_anomaly_score=round(sum(float(e["anomaly_score"]) for e in entries) / len(entries), 4),
     )
 
 
