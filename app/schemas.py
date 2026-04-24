@@ -64,3 +64,10 @@ class ServiceAnalytics(BaseModel):
     suppression_rate: float
     average_risk_score: float
     average_anomaly_score: float
+
+
+class SystemStatus(BaseModel):
+    status: str
+    uptime_seconds: int
+    connected_clients: int
+    total_events: int

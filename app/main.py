@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from app.schemas import (
     TelemetryEvent,
@@ -9,6 +10,7 @@ from app.schemas import (
     EventRecord,
     AnalyticsSummary,
     ServiceAnalytics,
+    SystemStatus,
 )
 from app.models.tf_anomaly import TensorFlowAnomalyDetector
 from app.models.pytorch_risk import PyTorchRiskModel
@@ -20,6 +22,7 @@ from app.config import settings
 app = FastAPI(title="Realtime Agentic Ops")
 anomaly_model = TensorFlowAnomalyDetector(window_size=8)
 risk_model = PyTorchRiskModel()
+app_started_at = datetime.now(timezone.utc)
 
 
 def build_explainability(
@@ -65,6 +68,17 @@ def build_explainability(
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/system/status", response_model=SystemStatus)
+def system_status():
+    uptime_seconds = int((datetime.now(timezone.utc) - app_started_at).total_seconds())
+    return SystemStatus(
+        status="ok",
+        uptime_seconds=uptime_seconds,
+        connected_clients=len(hub.clients),
+        total_events=hub.total_events,
+    )
 
 
 @app.get("/alerts/recent", response_model=list[EventRecord])
