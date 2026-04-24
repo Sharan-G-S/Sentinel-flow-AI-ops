@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
-from app.schemas import TelemetryEvent, InferenceResponse, AgentDecision, Explainability, EventRecord
+from app.schemas import (
+    TelemetryEvent,
+    InferenceResponse,
+    AgentDecision,
+    Explainability,
+    EventRecord,
+    AnalyticsSummary,
+)
 from app.models.tf_anomaly import TensorFlowAnomalyDetector
 from app.models.pytorch_risk import PyTorchRiskModel
 from app.services.event_bus import hub
@@ -62,6 +69,19 @@ def health():
 @app.get("/alerts/recent", response_model=list[EventRecord])
 def recent_alerts(limit: int = Query(default=20, ge=1, le=200)):
     return list(hub.recent_events)[:limit]
+
+
+@app.get("/analytics/summary", response_model=AnalyticsSummary)
+def analytics_summary():
+    total = max(hub.total_events, 1)
+    services = {entry["service"] for entry in hub.recent_events}
+    return AnalyticsSummary(
+        total_events=hub.total_events,
+        emitted_events=hub.emitted_events,
+        suppressed_events=hub.suppressed_events,
+        suppression_rate=round(hub.suppressed_events / total, 4),
+        active_services=len(services),
+    )
 
 
 @app.post("/ingest", response_model=InferenceResponse)

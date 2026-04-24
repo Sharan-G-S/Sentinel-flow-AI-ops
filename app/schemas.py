@@ -46,3 +46,11 @@ class EventRecord(BaseModel):
     severity: str
     emitted: bool
     suppression_reason: str | None = None
+
+
+class AnalyticsSummary(BaseModel):
+    total_events: int
+    emitted_events: int
+    suppressed_events: int
+    suppression_rate: float
+    active_services: int
