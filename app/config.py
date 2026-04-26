@@ -16,6 +16,8 @@ class Settings(BaseModel):
     dedup_medium_cooldown_sec: int = int(os.getenv("DEDUP_MEDIUM_COOLDOWN_SEC", "25"))
     dedup_low_cooldown_sec: int = int(os.getenv("DEDUP_LOW_COOLDOWN_SEC", "45"))
     event_history_size: int = int(os.getenv("EVENT_HISTORY_SIZE", "500"))
+    api_key_enabled: bool = os.getenv("API_KEY_ENABLED", "true").lower() == "true"
+    api_key: str = os.getenv("API_KEY", "")
 
 
 settings = Settings()
