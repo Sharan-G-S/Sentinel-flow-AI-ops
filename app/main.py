@@ -74,7 +74,11 @@ def build_explainability(
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "service": "sentinelflow-aiops",
+        "utc_time": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @app.get("/system/status", response_model=SystemStatus)
