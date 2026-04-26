@@ -22,6 +22,7 @@ This project provides a complete system workflow to ingest telemetry, score anom
 4. **LangGraph state machine** routes events and calls a LangChain LLM triage step.
 5. **WebSocket stream** (`/ws/decisions`) broadcasts live decisions.
 6. **Dashboard + simulator** show end-to-end real-time behavior.
+7. **SQLite persistence** stores alert records and analytics source data across restarts.
 
 ## Repo structure
 
@@ -100,5 +101,6 @@ All sensitive endpoints require header `x-api-key` when `API_KEY_ENABLED=true`.
 - `EVENT_HISTORY_SIZE`
 - `SIM_SERVICES`, `SIM_INTERVAL_SECONDS`
 - `API_KEY_ENABLED`, `API_KEY`
+- `SQLITE_DB_PATH`
 
 # Sharan G S
