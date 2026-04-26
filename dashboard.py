@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import httpx
 import streamlit as st
 import websocket
@@ -9,6 +10,7 @@ import threading
 
 WS_URL = "ws://127.0.0.1:8000/ws/decisions"
 API_URL = "http://127.0.0.1:8000"
+API_KEY = os.getenv("API_KEY", "")
 
 st.set_page_config(page_title="Realtime Agentic Ops Dashboard", layout="wide")
 st.title("Realtime Agentic Ops Dashboard")
@@ -22,7 +24,8 @@ if "connected" not in st.session_state:
 
 def fetch_json(path: str) -> dict:
     try:
-        response = httpx.get(f"{API_URL}{path}", timeout=5)
+        headers = {"x-api-key": API_KEY} if API_KEY else {}
+        response = httpx.get(f"{API_URL}{path}", headers=headers, timeout=5)
         response.raise_for_status()
         return response.json()
     except Exception:
@@ -48,7 +51,8 @@ def on_open(ws):
 
 
 def run_ws():
-    ws = websocket.WebSocketApp(WS_URL, on_message=on_message, on_error=on_error, on_open=on_open)
+    headers = [f"x-api-key: {API_KEY}"] if API_KEY else None
+    ws = websocket.WebSocketApp(WS_URL, header=headers, on_message=on_message, on_error=on_error, on_open=on_open)
     ws.run_forever()
 
 
