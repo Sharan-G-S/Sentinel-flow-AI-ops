@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect, Query, status
 from app.schemas import (
@@ -18,6 +19,7 @@ from app.models.tf_anomaly import TensorFlowAnomalyDetector
 from app.models.pytorch_risk import PyTorchRiskModel
 from app.services.event_bus import hub
 from app.services.storage import storage
+from app.services.notifier import notifier
 from app.agents.langgraph_flow import graph
 from app.config import settings
 from app.security import require_api_key
@@ -27,6 +29,7 @@ app = FastAPI(title="Realtime Agentic Ops")
 anomaly_model = TensorFlowAnomalyDetector(window_size=8)
 risk_model = PyTorchRiskModel()
 app_started_at = datetime.now(timezone.utc)
+logger = logging.getLogger(__name__)
 
 
 def build_explainability(
@@ -165,6 +168,10 @@ async def ingest_event(event: TelemetryEvent, _: None = Depends(require_api_key)
     storage.insert_event(event_record)
     if emitted:
         await hub.broadcast(payload)
+        try:
+            await notifier.notify(payload)
+        except Exception as exc:
+            logger.warning("failed to dispatch incident notification: %s", exc)
     return response
 
 
