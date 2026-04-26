@@ -91,11 +91,14 @@ POST `http://127.0.0.1:8000/ingest`
 - `GET /analytics/severity/{severity}` -> severity-level delivery metrics.
 - `POST /analytics/reset` -> clears rolling analytics history/counters.
 
+All sensitive endpoints require header `x-api-key` when `API_KEY_ENABLED=true`.
+
 ## Extra environment controls
 
 - `RISK_HIGH_THRESHOLD`, `RISK_MEDIUM_THRESHOLD`
 - `DEDUP_HIGH_COOLDOWN_SEC`, `DEDUP_MEDIUM_COOLDOWN_SEC`, `DEDUP_LOW_COOLDOWN_SEC`
 - `EVENT_HISTORY_SIZE`
 - `SIM_SERVICES`, `SIM_INTERVAL_SECONDS`
+- `API_KEY_ENABLED`, `API_KEY`
 
 # Sharan G S
