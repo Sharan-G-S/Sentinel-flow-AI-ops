@@ -10,6 +10,7 @@ import httpx
 API_URL = "http://127.0.0.1:8000/ingest"
 SERVICES = os.getenv("SIM_SERVICES", "checkout,payments,inventory,auth").split(",")
 INTERVAL_SECONDS = float(os.getenv("SIM_INTERVAL_SECONDS", "2"))
+API_KEY = os.getenv("API_KEY", "")
 
 
 async def push_event(client: httpx.AsyncClient, service: str):
@@ -31,8 +32,13 @@ async def push_event(client: httpx.AsyncClient, service: str):
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "metadata": {"error_rate": round(error_rate, 4)},
     }
-    r = await client.post(API_URL, json=payload, timeout=20)
-    print(service, r.status_code, r.json().get("risk_score"))
+    headers = {"x-api-key": API_KEY} if API_KEY else {}
+    r = await client.post(API_URL, json=payload, headers=headers, timeout=20)
+    try:
+        body = r.json()
+    except Exception:
+        body = {}
+    print(service, r.status_code, body.get("risk_score"), body.get("suppression_reason"))
 
 
 async def run():
