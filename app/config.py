@@ -18,6 +18,7 @@ class Settings(BaseModel):
     event_history_size: int = int(os.getenv("EVENT_HISTORY_SIZE", "500"))
     api_key_enabled: bool = os.getenv("API_KEY_ENABLED", "true").lower() == "true"
     api_key: str = os.getenv("API_KEY", "")
+    sqlite_db_path: str = os.getenv("SQLITE_DB_PATH", "sentinelflow.db")
 
 
 settings = Settings()
