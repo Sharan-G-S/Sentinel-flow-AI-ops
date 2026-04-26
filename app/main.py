@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect, Query, status
 from app.schemas import (
     TelemetryEvent,
     InferenceResponse,
@@ -19,6 +19,7 @@ from app.models.pytorch_risk import PyTorchRiskModel
 from app.services.event_bus import hub
 from app.agents.langgraph_flow import graph
 from app.config import settings
+from app.security import require_api_key
 
 
 app = FastAPI(title="Realtime Agentic Ops")
@@ -73,7 +74,7 @@ def health():
 
 
 @app.get("/system/status", response_model=SystemStatus)
-def system_status():
+def system_status(_: None = Depends(require_api_key)):
     uptime_seconds = int((datetime.now(timezone.utc) - app_started_at).total_seconds())
     return SystemStatus(
         status="ok",
@@ -88,6 +89,7 @@ def recent_alerts(
     limit: int = Query(default=20, ge=1, le=200),
     service: str | None = Query(default=None),
     emitted: bool | None = Query(default=None),
+    _: None = Depends(require_api_key),
 ):
     events = list(hub.recent_events)
     if service:
@@ -98,7 +100,7 @@ def recent_alerts(
 
 
 @app.get("/analytics/summary", response_model=AnalyticsSummary)
-def analytics_summary():
+def analytics_summary(_: None = Depends(require_api_key)):
     total = max(hub.total_events, 1)
     services = {entry["service"] for entry in hub.recent_events}
     return AnalyticsSummary(
@@ -111,7 +113,7 @@ def analytics_summary():
 
 
 @app.get("/analytics/service/{service}", response_model=ServiceAnalytics)
-def analytics_for_service(service: str):
+def analytics_for_service(service: str, _: None = Depends(require_api_key)):
     entries = [entry for entry in hub.recent_events if entry["service"] == service]
     if not entries:
         return ServiceAnalytics(
@@ -138,7 +140,7 @@ def analytics_for_service(service: str):
 
 
 @app.get("/analytics/severity/{severity}", response_model=SeverityAnalytics)
-def analytics_for_severity(severity: str):
+def analytics_for_severity(severity: str, _: None = Depends(require_api_key)):
     normalized = severity.lower()
     entries = [
         entry
@@ -155,13 +157,13 @@ def analytics_for_severity(severity: str):
 
 
 @app.post("/analytics/reset", response_model=ResetResponse)
-def reset_analytics():
+def reset_analytics(_: None = Depends(require_api_key)):
     hub.reset_analytics()
     return ResetResponse(ok=True, message="analytics counters and history reset")
 
 
 @app.post("/ingest", response_model=InferenceResponse)
-async def ingest_event(event: TelemetryEvent):
+async def ingest_event(event: TelemetryEvent, _: None = Depends(require_api_key)):
     window = hub.get_window(event.service, size=8)
     window.append(event.metric_value)
     padded = list(window)
@@ -212,6 +214,14 @@ async def ingest_event(event: TelemetryEvent):
 
 @app.websocket("/ws/decisions")
 async def ws_decisions(websocket: WebSocket):
+    if settings.api_key_enabled:
+        if not settings.api_key:
+            await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+            return
+        if websocket.headers.get("x-api-key") != settings.api_key:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
     await websocket.accept()
     await hub.register(websocket)
     try:
