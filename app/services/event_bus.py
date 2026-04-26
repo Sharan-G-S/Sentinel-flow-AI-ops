@@ -79,7 +79,7 @@ class RealtimeHub:
         self.last_emitted_by_signature[signature] = now
         return True, None
 
-    def record_event(self, payload: dict, emitted: bool, suppression_reason: str | None) -> None:
+    def record_event(self, payload: dict, emitted: bool, suppression_reason: str | None) -> dict[str, Any]:
         self.total_events += 1
         if emitted:
             self.emitted_events += 1
@@ -98,6 +98,7 @@ class RealtimeHub:
             "suppression_reason": suppression_reason,
         }
         self.recent_events.appendleft(entry)
+        return entry
 
     def reset_analytics(self) -> None:
         self.recent_events.clear()

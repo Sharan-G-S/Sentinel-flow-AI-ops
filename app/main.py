@@ -17,6 +17,7 @@ from app.schemas import (
 from app.models.tf_anomaly import TensorFlowAnomalyDetector
 from app.models.pytorch_risk import PyTorchRiskModel
 from app.services.event_bus import hub
+from app.services.storage import storage
 from app.agents.langgraph_flow import graph
 from app.config import settings
 from app.security import require_api_key
@@ -91,74 +92,28 @@ def recent_alerts(
     emitted: bool | None = Query(default=None),
     _: None = Depends(require_api_key),
 ):
-    events = list(hub.recent_events)
-    if service:
-        events = [entry for entry in events if entry["service"] == service]
-    if emitted is not None:
-        events = [entry for entry in events if bool(entry["emitted"]) == emitted]
-    return events[:limit]
+    return storage.list_recent_events(limit=limit, service=service, emitted=emitted)
 
 
 @app.get("/analytics/summary", response_model=AnalyticsSummary)
 def analytics_summary(_: None = Depends(require_api_key)):
-    total = max(hub.total_events, 1)
-    services = {entry["service"] for entry in hub.recent_events}
-    return AnalyticsSummary(
-        total_events=hub.total_events,
-        emitted_events=hub.emitted_events,
-        suppressed_events=hub.suppressed_events,
-        suppression_rate=round(hub.suppressed_events / total, 4),
-        active_services=len(services),
-    )
+    return AnalyticsSummary(**storage.get_summary())
 
 
 @app.get("/analytics/service/{service}", response_model=ServiceAnalytics)
 def analytics_for_service(service: str, _: None = Depends(require_api_key)):
-    entries = [entry for entry in hub.recent_events if entry["service"] == service]
-    if not entries:
-        return ServiceAnalytics(
-            service=service,
-            events=0,
-            emitted=0,
-            suppressed=0,
-            suppression_rate=0.0,
-            average_risk_score=0.0,
-            average_anomaly_score=0.0,
-        )
-
-    emitted = sum(1 for entry in entries if entry["emitted"])
-    suppressed = len(entries) - emitted
-    return ServiceAnalytics(
-        service=service,
-        events=len(entries),
-        emitted=emitted,
-        suppressed=suppressed,
-        suppression_rate=round(suppressed / len(entries), 4),
-        average_risk_score=round(sum(float(e["risk_score"]) for e in entries) / len(entries), 4),
-        average_anomaly_score=round(sum(float(e["anomaly_score"]) for e in entries) / len(entries), 4),
-    )
+    return ServiceAnalytics(**storage.get_service_analytics(service))
 
 
 @app.get("/analytics/severity/{severity}", response_model=SeverityAnalytics)
 def analytics_for_severity(severity: str, _: None = Depends(require_api_key)):
-    normalized = severity.lower()
-    entries = [
-        entry
-        for entry in hub.recent_events
-        if str(entry.get("severity", "unknown")).lower() == normalized
-    ]
-    emitted = sum(1 for entry in entries if entry["emitted"])
-    return SeverityAnalytics(
-        severity=normalized,
-        events=len(entries),
-        emitted=emitted,
-        suppressed=len(entries) - emitted,
-    )
+    return SeverityAnalytics(**storage.get_severity_analytics(severity))
 
 
 @app.post("/analytics/reset", response_model=ResetResponse)
 def reset_analytics(_: None = Depends(require_api_key)):
     hub.reset_analytics()
+    storage.reset()
     return ResetResponse(ok=True, message="analytics counters and history reset")
 
 
@@ -206,7 +161,8 @@ async def ingest_event(event: TelemetryEvent, _: None = Depends(require_api_key)
     emitted, suppression_reason = hub.should_emit(payload)
     response.emitted = emitted
     response.suppression_reason = suppression_reason
-    hub.record_event(payload, emitted=emitted, suppression_reason=suppression_reason)
+    event_record = hub.record_event(payload, emitted=emitted, suppression_reason=suppression_reason)
+    storage.insert_event(event_record)
     if emitted:
         await hub.broadcast(payload)
     return response
