@@ -19,6 +19,9 @@ class Settings(BaseModel):
     api_key_enabled: bool = os.getenv("API_KEY_ENABLED", "true").lower() == "true"
     api_key: str = os.getenv("API_KEY", "")
     sqlite_db_path: str = os.getenv("SQLITE_DB_PATH", "sentinelflow.db")
+    slack_webhook_url: str = os.getenv("SLACK_WEBHOOK_URL", "")
+    alert_webhook_url: str = os.getenv("ALERT_WEBHOOK_URL", "")
+    notify_high_severity_only: bool = os.getenv("NOTIFY_HIGH_SEVERITY_ONLY", "true").lower() == "true"
 
 
 settings = Settings()
