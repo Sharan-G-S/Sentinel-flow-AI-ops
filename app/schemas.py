@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 
@@ -16,6 +16,10 @@ class AgentDecision(BaseModel):
     probable_cause: str
     action: str
     confidence: float
+    severity_badge: str = Field(
+        default="",
+        description="Emoji badge derived from severity level (🔴 critical, 🟠 high, 🟡 medium, 🟢 low)",
+    )
 
 
 class Explainability(BaseModel):
@@ -83,3 +87,53 @@ class SeverityAnalytics(BaseModel):
 class ResetResponse(BaseModel):
     ok: bool
     message: str
+
+
+# ---------------------------------------------------------------------------
+# Batch ingest
+# ---------------------------------------------------------------------------
+class BatchIngestRequest(BaseModel):
+    events: List["TelemetryEvent"] = Field(..., min_length=1, max_length=100)
+
+
+class BatchIngestResponse(BaseModel):
+    accepted: int
+    results: List[Dict[str, Any]]
+
+
+# ---------------------------------------------------------------------------
+# Service health scoring
+# ---------------------------------------------------------------------------
+class ServiceHealthScore(BaseModel):
+    service: str
+    health_score: float = Field(..., ge=0.0, le=1.0, description="1.0 = fully healthy")
+    risk_trend: str
+    events_last_5min: int
+    suppression_rate: float
+    recommendation: str
+
+
+# ---------------------------------------------------------------------------
+# Audit
+# ---------------------------------------------------------------------------
+class AuditEntry(BaseModel):
+    _ts: Optional[str] = None
+    event: str
+    correlation_id: Optional[str] = None
+    service: Optional[str] = None
+
+
+class AuditTailResponse(BaseModel):
+    entries: List[Dict[str, Any]]
+    total_returned: int
+
+
+# ---------------------------------------------------------------------------
+# Circuit breaker
+# ---------------------------------------------------------------------------
+class CircuitBreakerStatus(BaseModel):
+    name: str
+    state: str
+    failure_count: int
+    failure_threshold: int
+    recovery_timeout_seconds: float
