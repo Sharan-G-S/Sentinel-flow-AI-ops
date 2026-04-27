@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
-from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect, Query, status
+from fastapi import Depends, FastAPI, Request, WebSocket, WebSocketDisconnect, Query, status
 from app.schemas import (
     TelemetryEvent,
     InferenceResponse,
@@ -14,18 +15,34 @@ from app.schemas import (
     SystemStatus,
     SeverityAnalytics,
     ResetResponse,
+    BatchIngestRequest,
+    BatchIngestResponse,
+    ServiceHealthScore,
+    AuditTailResponse,
+    CircuitBreakerStatus,
 )
 from app.models.tf_anomaly import TensorFlowAnomalyDetector
 from app.models.pytorch_risk import PyTorchRiskModel
 from app.services.event_bus import hub
 from app.services.storage import storage
 from app.services.notifier import notifier
+from app.services.metrics import metrics
+from app.services.audit import audit
 from app.agents.langgraph_flow import graph
+from app.agents.circuit_breaker import llm_circuit
 from app.config import settings
 from app.security import require_api_key
+from app.middleware.rate_limiter import SlidingWindowRateLimiter
+from app.middleware.correlation import CorrelationIDMiddleware
 
 
-app = FastAPI(title="Realtime Agentic Ops")
+app = FastAPI(title="SentinelFlow-AIOps", version="2.0.0")
+app.add_middleware(CorrelationIDMiddleware)
+app.add_middleware(
+    SlidingWindowRateLimiter,
+    max_requests=int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "120")),
+    window_seconds=int(os.getenv("RATE_LIMIT_WINDOW_SEC", "60")),
+)
 anomaly_model = TensorFlowAnomalyDetector(window_size=8)
 risk_model = PyTorchRiskModel()
 app_started_at = datetime.now(timezone.utc)
@@ -72,6 +89,14 @@ def build_explainability(
     )
 
 
+def _severity_badge(severity: str) -> str:
+    return {
+        "critical": "\U0001f534",
+        "high": "\U0001f7e0",
+        "medium": "\U0001f7e1",
+        "low": "\U0001f7e2",
+    }.get(severity.lower(), "\u26aa")
+
 @app.get("/health")
 def health():
     return {
@@ -79,6 +104,17 @@ def health():
         "service": "sentinelflow-aiops",
         "utc_time": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@app.get("/metrics", include_in_schema=False)
+def prometheus_metrics():
+    """Prometheus metrics exposition endpoint."""
+    from fastapi.responses import PlainTextResponse
+    metrics.set_gauge("sentinelflow_connected_clients", len(hub.clients))
+    metrics.set_gauge("sentinelflow_total_events", hub.total_events)
+    metrics.set_gauge("sentinelflow_emitted_events", hub.emitted_events)
+    metrics.set_gauge("sentinelflow_suppressed_events", hub.suppressed_events)
+    return PlainTextResponse(metrics.exposition(), media_type="text/plain; version=0.0.4")
 
 
 @app.get("/system/status", response_model=SystemStatus)
@@ -118,14 +154,73 @@ def analytics_for_severity(severity: str, _: None = Depends(require_api_key)):
 
 
 @app.post("/analytics/reset", response_model=ResetResponse)
-def reset_analytics(_: None = Depends(require_api_key)):
+def reset_analytics(request: Request, _: None = Depends(require_api_key)):
+    correlation_id = getattr(request.state, "correlation_id", "n/a")
     hub.reset_analytics()
     storage.reset()
+    audit.log_analytics_reset(correlation_id)
     return ResetResponse(ok=True, message="analytics counters and history reset")
 
 
+# ---------------------------------------------------------------------------
+# Service health scoring
+# ---------------------------------------------------------------------------
+@app.get("/health/service/{service}", response_model=ServiceHealthScore)
+def service_health(service: str, _: None = Depends(require_api_key)):
+    """Compute a composite 0–1 health score for a named service."""
+    sa = storage.get_service_analytics(service)
+    avg_risk: float = sa.get("average_risk_score", 0.0)
+    suppression_rate: float = sa.get("suppression_rate", 0.0)
+    events: int = sa.get("events", 0)
+
+    # Health degrades with rising risk and low suppression (more real alerts)
+    health_score = round(max(0.0, 1.0 - avg_risk * 0.7 - (1 - suppression_rate) * 0.3), 4)
+
+    if avg_risk >= settings.risk_high_threshold:
+        risk_trend = "critical"
+        recommendation = "Escalate immediately – engage on-call SRE."
+    elif avg_risk >= settings.risk_medium_threshold:
+        risk_trend = "elevated"
+        recommendation = "Increase monitoring cadence; review recent deployments."
+    else:
+        risk_trend = "normal"
+        recommendation = "No action required."
+
+    return ServiceHealthScore(
+        service=service,
+        health_score=health_score,
+        risk_trend=risk_trend,
+        events_last_5min=events,
+        suppression_rate=suppression_rate,
+        recommendation=recommendation,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Circuit-breaker status
+# ---------------------------------------------------------------------------
+@app.get("/system/circuit-breaker", response_model=CircuitBreakerStatus)
+def circuit_breaker_status(_: None = Depends(require_api_key)):
+    """Return the current state of the LLM circuit breaker."""
+    return CircuitBreakerStatus(**llm_circuit.status())
+
+
+# ---------------------------------------------------------------------------
+# Audit tail
+# ---------------------------------------------------------------------------
+@app.get("/audit/tail", response_model=AuditTailResponse)
+def audit_tail(n: int = Query(default=50, ge=1, le=500), _: None = Depends(require_api_key)):
+    """Return the last n audit log entries."""
+    entries = audit.tail(n=n)
+    return AuditTailResponse(entries=entries, total_returned=len(entries))
+
+
 @app.post("/ingest", response_model=InferenceResponse)
-async def ingest_event(event: TelemetryEvent, _: None = Depends(require_api_key)):
+async def ingest_event(request: Request, event: TelemetryEvent, _: None = Depends(require_api_key)):
+    correlation_id = getattr(request.state, "correlation_id", "n/a")
+    import time as _time
+    t0 = _time.monotonic()
+
     window = hub.get_window(event.service, size=8)
     window.append(event.metric_value)
     padded = list(window)
@@ -155,7 +250,9 @@ async def ingest_event(event: TelemetryEvent, _: None = Depends(require_api_key)
         }
     )
 
-    decision = AgentDecision(**state["decision"])
+    raw_decision = state["decision"]
+    raw_decision["severity_badge"] = _severity_badge(raw_decision.get("severity", "low"))
+    decision = AgentDecision(**raw_decision)
     response = InferenceResponse(
         event=event,
         anomaly_score=anomaly_score,
@@ -170,13 +267,67 @@ async def ingest_event(event: TelemetryEvent, _: None = Depends(require_api_key)
     response.suppression_reason = suppression_reason
     event_record = hub.record_event(payload, emitted=emitted, suppression_reason=suppression_reason)
     storage.insert_event(event_record)
+
+    audit.log_ingest(
+        correlation_id=correlation_id,
+        service=event.service,
+        metric_name=event.metric_name,
+        metric_value=event.metric_value,
+        risk_score=risk_score,
+        severity=decision.severity,
+        emitted=emitted,
+    )
+
+    elapsed = _time.monotonic() - t0
+    metrics.observe("sentinelflow_ingest_latency", elapsed)
+    metrics.inc("sentinelflow_ingest_total", labels=f'service="{event.service}"')
     if emitted:
+        metrics.inc("sentinelflow_emitted_total")
         await hub.broadcast(payload)
         try:
             await notifier.notify(payload)
+            audit.log_alert_dispatch(correlation_id, "webhook", event.service, decision.severity)
         except Exception as exc:
             logger.warning("failed to dispatch incident notification: %s", exc)
+    else:
+        metrics.inc("sentinelflow_suppressed_total")
     return response
+
+
+# ---------------------------------------------------------------------------
+# Batch ingest
+# ---------------------------------------------------------------------------
+@app.post("/ingest/batch", response_model=BatchIngestResponse)
+async def ingest_batch(request: Request, body: BatchIngestRequest, _: None = Depends(require_api_key)):
+    """Accept up to 100 telemetry events in a single HTTP call."""
+    correlation_id = getattr(request.state, "correlation_id", "n/a")
+    results = []
+    for event in body.events:
+        window = hub.get_window(event.service, size=8)
+        window.append(event.metric_value)
+        padded = list(window)
+        if len(padded) < 8:
+            padded = [padded[0]] * (8 - len(padded)) + padded
+
+        anomaly_score = anomaly_model.score(padded)
+        error_rate = float(event.metadata.get("error_rate", 0.02))
+        risk_score = risk_model.predict_risk(event.metric_value, anomaly_score, error_rate)
+        results.append(
+            {
+                "service": event.service,
+                "metric_name": event.metric_name,
+                "anomaly_score": round(anomaly_score, 4),
+                "risk_score": round(risk_score, 4),
+            }
+        )
+        metrics.inc("sentinelflow_batch_ingest_events_total")
+
+    audit.log_batch_ingest(
+        correlation_id=correlation_id,
+        count=len(body.events),
+        services=list({e.service for e in body.events}),
+    )
+    return BatchIngestResponse(accepted=len(body.events), results=results)
 
 
 @app.websocket("/ws/decisions")
@@ -190,11 +341,13 @@ async def ws_decisions(websocket: WebSocket):
             return
 
     await websocket.accept()
+    audit.log_websocket("connect", websocket.client.host if websocket.client else None)
     await hub.register(websocket)
     try:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
+        audit.log_websocket("disconnect", websocket.client.host if websocket.client else None)
         await hub.unregister(websocket)
     except Exception:
         await hub.unregister(websocket)
