@@ -186,4 +186,4 @@ All sensitive endpoints require header `x-api-key` when `API_KEY_ENABLED=true`.
 | `RATE_LIMIT_MAX_REQUESTS` | `120` | Max requests per window per client IP |
 | `RATE_LIMIT_WINDOW_SEC` | `60` | Rate-limit rolling window in seconds |
 
-# Sharan G S
+## Sharan G S
