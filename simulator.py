@@ -14,13 +14,17 @@ SPIKE_PROBABILITY = float(os.getenv("SIM_SPIKE_PROBABILITY", "0.25"))
 API_KEY = os.getenv("API_KEY", "")
 
 
+_SERVICE_BASELINES = {
+    "checkout": 55,
+    "payments": 63,
+    "inventory": 48,
+    "auth": 42,
+}
+
+
 async def push_event(client: httpx.AsyncClient, service: str):
-    base = {
-        "checkout": 55,
-        "payments": 63,
-        "inventory": 48,
-        "auth": 42,
-    }[service]
+    service = service.strip()
+    base = _SERVICE_BASELINES.get(service, 50)
 
     spike = random.choice([15, 25]) if random.random() < SPIKE_PROBABILITY else 0
     value = float(base + random.uniform(-7, 7) + spike)
