@@ -8,8 +8,13 @@ import websocket
 import threading
 
 
-WS_URL = "ws://127.0.0.1:8000/ws/decisions"
-API_URL = "http://127.0.0.1:8000"
+_API_HOST = os.getenv("API_HOST", "127.0.0.1")
+_API_PORT = os.getenv("API_PORT", os.getenv("PORT", "8000"))
+API_URL = os.getenv("API_URL", f"http://{_API_HOST}:{_API_PORT}")
+WS_URL = os.getenv(
+    "WS_URL",
+    API_URL.replace("https://", "wss://").replace("http://", "ws://") + "/ws/decisions",
+)
 API_KEY = os.getenv("API_KEY", "")
 
 st.set_page_config(page_title="Realtime Agentic Ops Dashboard", layout="wide")
