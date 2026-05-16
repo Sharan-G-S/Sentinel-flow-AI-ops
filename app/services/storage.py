@@ -160,6 +160,13 @@ class SQLiteStorage:
             "suppressed": events - emitted_count,
         }
 
+    def list_distinct_services(self) -> list[str]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT DISTINCT service FROM events ORDER BY service ASC"
+            ).fetchall()
+        return [str(row["service"]) for row in rows]
+
     def reset(self) -> None:
         with self._lock:
             self._conn.execute("DELETE FROM events")
