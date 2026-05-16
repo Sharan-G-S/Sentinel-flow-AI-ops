@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import sqlite3
 from threading import Lock
 from typing import Any
@@ -163,6 +165,28 @@ class SQLiteStorage:
             "emitted": emitted_count,
             "suppressed": events - emitted_count,
         }
+
+    def export_events_csv(self, limit: int = 500) -> str:
+        events = self.list_recent_events(limit=limit)
+        buffer = io.StringIO()
+        writer = csv.DictWriter(
+            buffer,
+            fieldnames=[
+                "recorded_at",
+                "service",
+                "metric_name",
+                "metric_value",
+                "risk_score",
+                "anomaly_score",
+                "severity",
+                "emitted",
+                "suppression_reason",
+            ],
+        )
+        writer.writeheader()
+        for row in events:
+            writer.writerow({**row, "emitted": int(row["emitted"])})
+        return buffer.getvalue()
 
     def list_distinct_services(self) -> list[str]:
         with self._lock:

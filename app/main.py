@@ -129,6 +129,22 @@ def system_status(_: None = Depends(require_api_key)):
     )
 
 
+@app.get("/alerts/export", include_in_schema=True)
+def export_alerts(
+    limit: int = Query(default=500, ge=1, le=5000),
+    _: None = Depends(require_api_key),
+):
+    """Download recent alert records as CSV for offline analysis."""
+    from fastapi.responses import PlainTextResponse
+
+    csv_body = storage.export_events_csv(limit=limit)
+    return PlainTextResponse(
+        csv_body,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="alerts_export.csv"'},
+    )
+
+
 @app.get("/alerts/recent", response_model=list[EventRecord])
 def recent_alerts(
     limit: int = Query(default=20, ge=1, le=200),
