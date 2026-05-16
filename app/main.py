@@ -21,6 +21,7 @@ from app.schemas import (
     ServiceHealthList,
     AuditTailResponse,
     CircuitBreakerStatus,
+    VersionInfo,
 )
 from app.models.tf_anomaly import TensorFlowAnomalyDetector
 from app.models.pytorch_risk import PyTorchRiskModel
@@ -38,7 +39,7 @@ from app.middleware.correlation import CorrelationIDMiddleware
 from app.middleware.timing import RequestTimingMiddleware
 
 
-app = FastAPI(title="SentinelFlow-AIOps", version="2.0.0")
+app = FastAPI(title="SentinelFlow-AIOps", version=settings.app_version)
 app.add_middleware(RequestTimingMiddleware)
 app.add_middleware(CorrelationIDMiddleware)
 app.add_middleware(
@@ -107,6 +108,17 @@ def health():
         "service": "sentinelflow-aiops",
         "utc_time": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@app.get("/version", response_model=VersionInfo)
+def version_info():
+    import sys
+
+    return VersionInfo(
+        name="SentinelFlow-AIOps",
+        version=settings.app_version,
+        python=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+    )
 
 
 @app.get("/metrics", include_in_schema=False)
