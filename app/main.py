@@ -35,9 +35,11 @@ from app.config import settings
 from app.security import require_api_key
 from app.middleware.rate_limiter import SlidingWindowRateLimiter
 from app.middleware.correlation import CorrelationIDMiddleware
+from app.middleware.timing import RequestTimingMiddleware
 
 
 app = FastAPI(title="SentinelFlow-AIOps", version="2.0.0")
+app.add_middleware(RequestTimingMiddleware)
 app.add_middleware(CorrelationIDMiddleware)
 app.add_middleware(
     SlidingWindowRateLimiter,
