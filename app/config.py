@@ -22,6 +22,10 @@ class Settings(BaseModel):
     slack_webhook_url: str = os.getenv("SLACK_WEBHOOK_URL", "")
     alert_webhook_url: str = os.getenv("ALERT_WEBHOOK_URL", "")
     notify_high_severity_only: bool = os.getenv("NOTIFY_HIGH_SEVERITY_ONLY", "true").lower() == "true"
+    audit_log_path: str = os.getenv("AUDIT_LOG_PATH", "audit.jsonl")
+    audit_retention_max_lines: int = int(os.getenv("AUDIT_RETENTION_MAX_LINES", "10000"))
+    app_version: str = os.getenv("APP_VERSION", "2.1.0")
+    log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
 
 settings = Settings()
