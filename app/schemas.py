@@ -113,6 +113,11 @@ class ServiceHealthScore(BaseModel):
     recommendation: str
 
 
+class ServiceHealthList(BaseModel):
+    services: List[ServiceHealthScore]
+    total: int
+
+
 # ---------------------------------------------------------------------------
 # Audit
 # ---------------------------------------------------------------------------
@@ -137,3 +142,9 @@ class CircuitBreakerStatus(BaseModel):
     failure_count: int
     failure_threshold: int
     recovery_timeout_seconds: float
+
+
+class VersionInfo(BaseModel):
+    name: str
+    version: str
+    python: str
