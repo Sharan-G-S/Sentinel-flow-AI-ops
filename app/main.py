@@ -93,6 +93,14 @@ def build_explainability(
     )
 
 
+def _pad_metric_window(window: list[float], metric_value: float, size: int = 8) -> list[float]:
+    padded = list(window)
+    if len(padded) < size:
+        fill = padded[0] if padded else metric_value
+        padded = [fill] * (size - len(padded)) + padded
+    return padded
+
+
 def _severity_badge(severity: str) -> str:
     return {
         "critical": "\U0001f534",
@@ -267,9 +275,7 @@ async def ingest_event(request: Request, event: TelemetryEvent, _: None = Depend
 
     window = hub.get_window(event.service, size=8)
     window.append(event.metric_value)
-    padded = list(window)
-    if len(padded) < 8:
-        padded = [padded[0]] * (8 - len(padded)) + padded
+    padded = _pad_metric_window(list(window), event.metric_value)
 
     anomaly_score = anomaly_model.score(padded)
     error_rate = float(event.metadata.get("error_rate", 0.02))
@@ -349,9 +355,7 @@ async def ingest_batch(request: Request, body: BatchIngestRequest, _: None = Dep
     for event in body.events:
         window = hub.get_window(event.service, size=8)
         window.append(event.metric_value)
-        padded = list(window)
-        if len(padded) < 8:
-            padded = [padded[0]] * (8 - len(padded)) + padded
+        padded = _pad_metric_window(list(window), event.metric_value)
 
         anomaly_score = anomaly_model.score(padded)
         error_rate = float(event.metadata.get("error_rate", 0.02))
