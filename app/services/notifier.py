@@ -30,8 +30,8 @@ class IncidentNotifier:
     def _should_notify(self, payload: dict[str, Any]) -> bool:
         severity = str(payload.get("decision", {}).get("severity", "unknown")).lower()
         if settings.notify_high_severity_only:
-            return severity == "high"
-        return severity in {"high", "medium", "low"}
+            return severity in {"high", "critical"}
+        return severity in {"critical", "high", "medium", "low"}
 
     @staticmethod
     def _build_slack_message(payload: dict[str, Any]) -> str:
