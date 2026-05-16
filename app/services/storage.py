@@ -63,6 +63,7 @@ class SQLiteStorage:
         limit: int,
         service: str | None = None,
         emitted: bool | None = None,
+        severity: str | None = None,
     ) -> list[dict[str, Any]]:
         clauses: list[str] = []
         params: list[Any] = []
@@ -72,6 +73,9 @@ class SQLiteStorage:
         if emitted is not None:
             clauses.append("emitted = ?")
             params.append(1 if emitted else 0)
+        if severity:
+            clauses.append("LOWER(severity) = LOWER(?)")
+            params.append(severity)
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         query = (

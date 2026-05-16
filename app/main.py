@@ -134,9 +134,12 @@ def recent_alerts(
     limit: int = Query(default=20, ge=1, le=200),
     service: str | None = Query(default=None),
     emitted: bool | None = Query(default=None),
+    severity: str | None = Query(default=None),
     _: None = Depends(require_api_key),
 ):
-    return storage.list_recent_events(limit=limit, service=service, emitted=emitted)
+    return storage.list_recent_events(
+        limit=limit, service=service, emitted=emitted, severity=severity
+    )
 
 
 @app.get("/analytics/summary", response_model=AnalyticsSummary)
