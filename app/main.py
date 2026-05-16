@@ -101,6 +101,14 @@ def _pad_metric_window(window: list[float], metric_value: float, size: int = 8) 
     return padded
 
 
+def _risk_to_severity(risk_score: float) -> str:
+    if risk_score >= settings.risk_high_threshold:
+        return "high"
+    if risk_score >= settings.risk_medium_threshold:
+        return "medium"
+    return "low"
+
+
 def _severity_badge(severity: str) -> str:
     return {
         "critical": "\U0001f534",
@@ -360,12 +368,26 @@ async def ingest_batch(request: Request, body: BatchIngestRequest, _: None = Dep
         anomaly_score = anomaly_model.score(padded)
         error_rate = float(event.metadata.get("error_rate", 0.02))
         risk_score = risk_model.predict_risk(event.metric_value, anomaly_score, error_rate)
+        severity = _risk_to_severity(risk_score)
         results.append(
             {
                 "service": event.service,
                 "metric_name": event.metric_name,
                 "anomaly_score": round(anomaly_score, 4),
                 "risk_score": round(risk_score, 4),
+            }
+        )
+        storage.insert_event(
+            {
+                "recorded_at": datetime.now(timezone.utc).isoformat(),
+                "service": event.service,
+                "metric_name": event.metric_name,
+                "metric_value": event.metric_value,
+                "risk_score": risk_score,
+                "anomaly_score": anomaly_score,
+                "severity": severity,
+                "emitted": True,
+                "suppression_reason": None,
             }
         )
         metrics.inc("sentinelflow_batch_ingest_events_total")
