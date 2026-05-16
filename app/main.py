@@ -44,8 +44,8 @@ app.add_middleware(RequestTimingMiddleware)
 app.add_middleware(CorrelationIDMiddleware)
 app.add_middleware(
     SlidingWindowRateLimiter,
-    max_requests=int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "120")),
-    window_seconds=int(os.getenv("RATE_LIMIT_WINDOW_SEC", "60")),
+    max_requests=settings.rate_limit_max_requests,
+    window_seconds=settings.rate_limit_window_sec,
 )
 anomaly_model = TensorFlowAnomalyDetector(window_size=8)
 risk_model = PyTorchRiskModel()

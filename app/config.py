@@ -26,6 +26,8 @@ class Settings(BaseModel):
     audit_retention_max_lines: int = int(os.getenv("AUDIT_RETENTION_MAX_LINES", "10000"))
     app_version: str = os.getenv("APP_VERSION", "2.1.0")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    rate_limit_max_requests: int = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "120"))
+    rate_limit_window_sec: int = int(os.getenv("RATE_LIMIT_WINDOW_SEC", "60"))
 
 
 settings = Settings()
