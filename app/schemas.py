@@ -1,13 +1,17 @@
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class TelemetryEvent(BaseModel):
     service: str = Field(..., description="Microservice name")
     metric_name: str
     metric_value: float
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utc_now)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
