@@ -18,6 +18,7 @@ from app.schemas import (
     BatchIngestRequest,
     BatchIngestResponse,
     ServiceHealthScore,
+    ServiceHealthList,
     AuditTailResponse,
     CircuitBreakerStatus,
 )
@@ -165,15 +166,12 @@ def reset_analytics(request: Request, _: None = Depends(require_api_key)):
 # ---------------------------------------------------------------------------
 # Service health scoring
 # ---------------------------------------------------------------------------
-@app.get("/health/service/{service}", response_model=ServiceHealthScore)
-def service_health(service: str, _: None = Depends(require_api_key)):
-    """Compute a composite 0–1 health score for a named service."""
+def _compute_service_health(service: str) -> ServiceHealthScore:
     sa = storage.get_service_analytics(service)
     avg_risk: float = sa.get("average_risk_score", 0.0)
     suppression_rate: float = sa.get("suppression_rate", 0.0)
     events: int = sa.get("events", 0)
 
-    # Health degrades with rising risk and low suppression (more real alerts)
     health_score = round(max(0.0, 1.0 - avg_risk * 0.7 - (1 - suppression_rate) * 0.3), 4)
 
     if avg_risk >= settings.risk_high_threshold:
@@ -194,6 +192,19 @@ def service_health(service: str, _: None = Depends(require_api_key)):
         suppression_rate=suppression_rate,
         recommendation=recommendation,
     )
+
+
+@app.get("/health/service/{service}", response_model=ServiceHealthScore)
+def service_health(service: str, _: None = Depends(require_api_key)):
+    """Compute a composite 0–1 health score for a named service."""
+    return _compute_service_health(service)
+
+
+@app.get("/health/services", response_model=ServiceHealthList)
+def all_services_health(_: None = Depends(require_api_key)):
+    """Return composite health scores for every service seen in storage."""
+    scores = [_compute_service_health(s) for s in storage.list_distinct_services()]
+    return ServiceHealthList(services=scores, total=len(scores))
 
 
 # ---------------------------------------------------------------------------
