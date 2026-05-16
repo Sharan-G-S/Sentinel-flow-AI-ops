@@ -74,7 +74,19 @@ if system_status:
         f"Connected clients: {system_status.get('connected_clients', 0)}"
     )
 
+cb_status = fetch_json("/system/circuit-breaker")
+if cb_status:
+    cb_col1, cb_col2 = st.columns(2)
+    cb_col1.metric("Circuit Breaker", cb_status.get("state", "unknown").upper())
+    cb_col2.metric("LLM Failures", cb_status.get("failure_count", 0))
+
 service_input = st.text_input("Service drilldown", value="payments")
+health_data = fetch_json(f"/health/service/{service_input}")
+if health_data:
+    h1, h2, h3 = st.columns(3)
+    h1.metric("Health Score", f"{health_data.get('health_score', 0):.2f}")
+    h2.metric("Risk Trend", health_data.get("risk_trend", "n/a"))
+    h3.caption(health_data.get("recommendation", ""))
 service_analytics = fetch_json(f"/analytics/service/{service_input}")
 if service_analytics:
     st.caption(
