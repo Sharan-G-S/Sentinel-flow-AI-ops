@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import Depends, FastAPI, Request, WebSocket, WebSocketDisconnect, Query, status
 from app.schemas import (
@@ -39,7 +40,18 @@ from app.middleware.correlation import CorrelationIDMiddleware
 from app.middleware.timing import RequestTimingMiddleware
 
 
-app = FastAPI(title="SentinelFlow-AIOps", version=settings.app_version)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    level = getattr(logging, settings.log_level.upper(), logging.INFO)
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+    logger.info("SentinelFlow-AIOps v%s starting", settings.app_version)
+    yield
+
+
+app = FastAPI(title="SentinelFlow-AIOps", version=settings.app_version, lifespan=lifespan)
 app.add_middleware(RequestTimingMiddleware)
 app.add_middleware(CorrelationIDMiddleware)
 app.add_middleware(
