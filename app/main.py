@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import Depends, FastAPI, Request, WebSocket, WebSocketDisconnect, Query, status
@@ -440,7 +441,8 @@ async def ws_decisions(websocket: WebSocket):
         if not settings.api_key:
             await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
             return
-        if websocket.headers.get("x-api-key") != settings.api_key:
+        provided = (websocket.headers.get("x-api-key") or "").strip()
+        if not secrets.compare_digest(provided, settings.api_key):
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
 
