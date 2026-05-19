@@ -152,3 +152,15 @@ class VersionInfo(BaseModel):
     name: str
     version: str
     python: str
+
+
+class ReadinessResponse(BaseModel):
+    status: str
+    database: str
+    utc_time: str
+
+
+class AlertCountResponse(BaseModel):
+    total: int
+    service: str | None = None
+    severity: str | None = None
