@@ -9,26 +9,37 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from app.config import settings
+
 
 logger = logging.getLogger(__name__)
-
-_AUDIT_LOG_PATH = os.getenv("AUDIT_LOG_PATH", "audit.jsonl")
 
 
 class AuditLogger:
     """Thread-safe append-only JSONL audit writer."""
 
-    def __init__(self, path: str = _AUDIT_LOG_PATH) -> None:
-        self._path = Path(path)
+    def __init__(self, path: str | None = None) -> None:
+        self._path = Path(path or settings.audit_log_path)
+        self._max_lines = settings.audit_retention_max_lines
         self._lock = Lock()
-        # Ensure the parent directory exists
         self._path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _prune_if_needed(self) -> None:
+        if self._max_lines <= 0 or not self._path.exists():
+            return
+        try:
+            lines = self._path.read_text(encoding="utf-8").splitlines()
+            if len(lines) <= self._max_lines:
+                return
+            kept = lines[-self._max_lines :]
+            self._path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+        except OSError as exc:
+            logger.warning("audit log prune failed: %s", exc)
 
     def _write(self, entry: dict[str, Any]) -> None:
         entry["_ts"] = datetime.now(timezone.utc).isoformat()
@@ -37,6 +48,7 @@ class AuditLogger:
             try:
                 with self._path.open("a", encoding="utf-8") as fh:
                     fh.write(line + "\n")
+                self._prune_if_needed()
             except OSError as exc:
                 logger.warning("audit log write failed: %s", exc)
 

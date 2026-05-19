@@ -10,18 +10,23 @@ import httpx
 API_URL = "http://127.0.0.1:8000/ingest"
 SERVICES = os.getenv("SIM_SERVICES", "checkout,payments,inventory,auth").split(",")
 INTERVAL_SECONDS = float(os.getenv("SIM_INTERVAL_SECONDS", "2"))
+SPIKE_PROBABILITY = float(os.getenv("SIM_SPIKE_PROBABILITY", "0.25"))
 API_KEY = os.getenv("API_KEY", "")
 
 
-async def push_event(client: httpx.AsyncClient, service: str):
-    base = {
-        "checkout": 55,
-        "payments": 63,
-        "inventory": 48,
-        "auth": 42,
-    }[service]
+_SERVICE_BASELINES = {
+    "checkout": 55,
+    "payments": 63,
+    "inventory": 48,
+    "auth": 42,
+}
 
-    spike = random.choice([0, 0, 0, 15, 25])
+
+async def push_event(client: httpx.AsyncClient, service: str):
+    service = service.strip()
+    base = _SERVICE_BASELINES.get(service, 50)
+
+    spike = random.choice([15, 25]) if random.random() < SPIKE_PROBABILITY else 0
     value = float(base + random.uniform(-7, 7) + spike)
     error_rate = max(0.0, min(0.4, (value - base) / 100 + random.uniform(0, 0.05)))
 

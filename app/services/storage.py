@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import sqlite3
 from threading import Lock
 from typing import Any
@@ -33,6 +35,9 @@ class SQLiteStorage:
                 )
                 """
             )
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_events_service ON events (service)"
+            )
             self._conn.commit()
 
     def insert_event(self, entry: dict[str, Any]) -> None:
@@ -63,6 +68,7 @@ class SQLiteStorage:
         limit: int,
         service: str | None = None,
         emitted: bool | None = None,
+        severity: str | None = None,
     ) -> list[dict[str, Any]]:
         clauses: list[str] = []
         params: list[Any] = []
@@ -72,6 +78,9 @@ class SQLiteStorage:
         if emitted is not None:
             clauses.append("emitted = ?")
             params.append(1 if emitted else 0)
+        if severity:
+            clauses.append("LOWER(severity) = LOWER(?)")
+            params.append(severity)
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         query = (
@@ -159,6 +168,63 @@ class SQLiteStorage:
             "emitted": emitted_count,
             "suppressed": events - emitted_count,
         }
+
+    def export_events_csv(self, limit: int = 500) -> str:
+        events = self.list_recent_events(limit=limit)
+        buffer = io.StringIO()
+        writer = csv.DictWriter(
+            buffer,
+            fieldnames=[
+                "recorded_at",
+                "service",
+                "metric_name",
+                "metric_value",
+                "risk_score",
+                "anomaly_score",
+                "severity",
+                "emitted",
+                "suppression_reason",
+            ],
+        )
+        writer.writeheader()
+        for row in events:
+            writer.writerow({**row, "emitted": int(row["emitted"])})
+        return buffer.getvalue()
+
+    def ping(self) -> bool:
+        try:
+            with self._lock:
+                self._conn.execute("SELECT 1").fetchone()
+            return True
+        except sqlite3.Error:
+            return False
+
+    def count_events(
+        self,
+        service: str | None = None,
+        severity: str | None = None,
+    ) -> int:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if service:
+            clauses.append("service = ?")
+            params.append(service)
+        if severity:
+            clauses.append("LOWER(severity) = LOWER(?)")
+            params.append(severity)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._lock:
+            row = self._conn.execute(
+                f"SELECT COUNT(*) AS total FROM events {where}", tuple(params)
+            ).fetchone()
+        return int(row["total"])
+
+    def list_distinct_services(self) -> list[str]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT DISTINCT service FROM events ORDER BY service ASC"
+            ).fetchall()
+        return [str(row["service"]) for row in rows]
 
     def reset(self) -> None:
         with self._lock:

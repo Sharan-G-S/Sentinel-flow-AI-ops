@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import Depends, FastAPI, Request, WebSocket, WebSocketDisconnect, Query, status
+from fastapi.middleware.cors import CORSMiddleware
 from app.schemas import (
     TelemetryEvent,
     InferenceResponse,
@@ -18,8 +21,12 @@ from app.schemas import (
     BatchIngestRequest,
     BatchIngestResponse,
     ServiceHealthScore,
+    ServiceHealthList,
     AuditTailResponse,
     CircuitBreakerStatus,
+    VersionInfo,
+    ReadinessResponse,
+    AlertCountResponse,
 )
 from app.models.tf_anomaly import TensorFlowAnomalyDetector
 from app.models.pytorch_risk import PyTorchRiskModel
@@ -34,14 +41,36 @@ from app.config import settings
 from app.security import require_api_key
 from app.middleware.rate_limiter import SlidingWindowRateLimiter
 from app.middleware.correlation import CorrelationIDMiddleware
+from app.middleware.timing import RequestTimingMiddleware
 
 
-app = FastAPI(title="SentinelFlow-AIOps", version="2.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    level = getattr(logging, settings.log_level.upper(), logging.INFO)
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+    logger.info("SentinelFlow-AIOps v%s starting", settings.app_version)
+    yield
+
+
+app = FastAPI(title="SentinelFlow-AIOps", version=settings.app_version, lifespan=lifespan)
+if settings.cors_origins:
+    _origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+app.add_middleware(RequestTimingMiddleware)
 app.add_middleware(CorrelationIDMiddleware)
 app.add_middleware(
     SlidingWindowRateLimiter,
-    max_requests=int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "120")),
-    window_seconds=int(os.getenv("RATE_LIMIT_WINDOW_SEC", "60")),
+    max_requests=settings.rate_limit_max_requests,
+    window_seconds=settings.rate_limit_window_sec,
 )
 anomaly_model = TensorFlowAnomalyDetector(window_size=8)
 risk_model = PyTorchRiskModel()
@@ -89,6 +118,22 @@ def build_explainability(
     )
 
 
+def _pad_metric_window(window: list[float], metric_value: float, size: int = 8) -> list[float]:
+    padded = list(window)
+    if len(padded) < size:
+        fill = padded[0] if padded else metric_value
+        padded = [fill] * (size - len(padded)) + padded
+    return padded
+
+
+def _risk_to_severity(risk_score: float) -> str:
+    if risk_score >= settings.risk_high_threshold:
+        return "high"
+    if risk_score >= settings.risk_medium_threshold:
+        return "medium"
+    return "low"
+
+
 def _severity_badge(severity: str) -> str:
     return {
         "critical": "\U0001f534",
@@ -104,6 +149,27 @@ def health():
         "service": "sentinelflow-aiops",
         "utc_time": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@app.get("/health/ready", response_model=ReadinessResponse)
+def readiness():
+    db_ok = storage.ping()
+    return ReadinessResponse(
+        status="ready" if db_ok else "degraded",
+        database="ok" if db_ok else "unavailable",
+        utc_time=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@app.get("/version", response_model=VersionInfo)
+def version_info():
+    import sys
+
+    return VersionInfo(
+        name="SentinelFlow-AIOps",
+        version=settings.app_version,
+        python=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+    )
 
 
 @app.get("/metrics", include_in_schema=False)
@@ -128,14 +194,43 @@ def system_status(_: None = Depends(require_api_key)):
     )
 
 
+@app.get("/alerts/count", response_model=AlertCountResponse)
+def alert_count(
+    service: str | None = Query(default=None),
+    severity: str | None = Query(default=None),
+    _: None = Depends(require_api_key),
+):
+    total = storage.count_events(service=service, severity=severity)
+    return AlertCountResponse(total=total, service=service, severity=severity)
+
+
+@app.get("/alerts/export", include_in_schema=True)
+def export_alerts(
+    limit: int = Query(default=500, ge=1, le=5000),
+    _: None = Depends(require_api_key),
+):
+    """Download recent alert records as CSV for offline analysis."""
+    from fastapi.responses import PlainTextResponse
+
+    csv_body = storage.export_events_csv(limit=limit)
+    return PlainTextResponse(
+        csv_body,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="alerts_export.csv"'},
+    )
+
+
 @app.get("/alerts/recent", response_model=list[EventRecord])
 def recent_alerts(
     limit: int = Query(default=20, ge=1, le=200),
     service: str | None = Query(default=None),
     emitted: bool | None = Query(default=None),
+    severity: str | None = Query(default=None),
     _: None = Depends(require_api_key),
 ):
-    return storage.list_recent_events(limit=limit, service=service, emitted=emitted)
+    return storage.list_recent_events(
+        limit=limit, service=service, emitted=emitted, severity=severity
+    )
 
 
 @app.get("/analytics/summary", response_model=AnalyticsSummary)
@@ -165,15 +260,12 @@ def reset_analytics(request: Request, _: None = Depends(require_api_key)):
 # ---------------------------------------------------------------------------
 # Service health scoring
 # ---------------------------------------------------------------------------
-@app.get("/health/service/{service}", response_model=ServiceHealthScore)
-def service_health(service: str, _: None = Depends(require_api_key)):
-    """Compute a composite 0–1 health score for a named service."""
+def _compute_service_health(service: str) -> ServiceHealthScore:
     sa = storage.get_service_analytics(service)
     avg_risk: float = sa.get("average_risk_score", 0.0)
     suppression_rate: float = sa.get("suppression_rate", 0.0)
     events: int = sa.get("events", 0)
 
-    # Health degrades with rising risk and low suppression (more real alerts)
     health_score = round(max(0.0, 1.0 - avg_risk * 0.7 - (1 - suppression_rate) * 0.3), 4)
 
     if avg_risk >= settings.risk_high_threshold:
@@ -194,6 +286,19 @@ def service_health(service: str, _: None = Depends(require_api_key)):
         suppression_rate=suppression_rate,
         recommendation=recommendation,
     )
+
+
+@app.get("/health/service/{service}", response_model=ServiceHealthScore)
+def service_health(service: str, _: None = Depends(require_api_key)):
+    """Compute a composite 0–1 health score for a named service."""
+    return _compute_service_health(service)
+
+
+@app.get("/health/services", response_model=ServiceHealthList)
+def all_services_health(_: None = Depends(require_api_key)):
+    """Return composite health scores for every service seen in storage."""
+    scores = [_compute_service_health(s) for s in storage.list_distinct_services()]
+    return ServiceHealthList(services=scores, total=len(scores))
 
 
 # ---------------------------------------------------------------------------
@@ -223,9 +328,7 @@ async def ingest_event(request: Request, event: TelemetryEvent, _: None = Depend
 
     window = hub.get_window(event.service, size=8)
     window.append(event.metric_value)
-    padded = list(window)
-    if len(padded) < 8:
-        padded = [padded[0]] * (8 - len(padded)) + padded
+    padded = _pad_metric_window(list(window), event.metric_value)
 
     anomaly_score = anomaly_model.score(padded)
     error_rate = float(event.metadata.get("error_rate", 0.02))
@@ -305,19 +408,31 @@ async def ingest_batch(request: Request, body: BatchIngestRequest, _: None = Dep
     for event in body.events:
         window = hub.get_window(event.service, size=8)
         window.append(event.metric_value)
-        padded = list(window)
-        if len(padded) < 8:
-            padded = [padded[0]] * (8 - len(padded)) + padded
+        padded = _pad_metric_window(list(window), event.metric_value)
 
         anomaly_score = anomaly_model.score(padded)
         error_rate = float(event.metadata.get("error_rate", 0.02))
         risk_score = risk_model.predict_risk(event.metric_value, anomaly_score, error_rate)
+        severity = _risk_to_severity(risk_score)
         results.append(
             {
                 "service": event.service,
                 "metric_name": event.metric_name,
                 "anomaly_score": round(anomaly_score, 4),
                 "risk_score": round(risk_score, 4),
+            }
+        )
+        storage.insert_event(
+            {
+                "recorded_at": datetime.now(timezone.utc).isoformat(),
+                "service": event.service,
+                "metric_name": event.metric_name,
+                "metric_value": event.metric_value,
+                "risk_score": risk_score,
+                "anomaly_score": anomaly_score,
+                "severity": severity,
+                "emitted": True,
+                "suppression_reason": None,
             }
         )
         metrics.inc("sentinelflow_batch_ingest_events_total")
@@ -336,7 +451,8 @@ async def ws_decisions(websocket: WebSocket):
         if not settings.api_key:
             await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
             return
-        if websocket.headers.get("x-api-key") != settings.api_key:
+        provided = (websocket.headers.get("x-api-key") or "").strip()
+        if not secrets.compare_digest(provided, settings.api_key):
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
 

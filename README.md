@@ -1,6 +1,6 @@
 # Sharan G S
 
-# SentinelFlow-AIOps v2.0.0
+# SentinelFlow-AIOps v2.2.0
 
 Realtime agentic incident triage platform for distributed systems using **LangGraph + LangChain + FastAPI + WebSockets + PyTorch + TensorFlow**.
 
@@ -141,6 +141,8 @@ POST http://127.0.0.1:8000/ingest/batch
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/health` | Liveness probe |
+| `GET` | `/health/ready` | Readiness probe (SQLite connectivity) |
+| `GET` | `/version` | App name, semver, Python runtime |
 | `GET` | `/metrics` | Prometheus text exposition |
 | `GET` | `/system/status` | Uptime, clients, total events |
 | `GET` | `/system/circuit-breaker` | LLM circuit-breaker state |
@@ -149,7 +151,9 @@ POST http://127.0.0.1:8000/ingest/batch
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/alerts/recent` | Filtered event timeline (`limit`, `service`, `emitted`) |
+| `GET` | `/alerts/recent` | Filtered event timeline (`limit`, `service`, `emitted`, `severity`) |
+| `GET` | `/alerts/count` | Total alert count with optional filters |
+| `GET` | `/alerts/export` | Download alerts as CSV |
 | `GET` | `/analytics/summary` | Global suppression and throughput metrics |
 | `GET` | `/analytics/service/{service}` | Per-service averages and suppression |
 | `GET` | `/analytics/severity/{severity}` | Severity-level delivery metrics |
@@ -160,6 +164,7 @@ POST http://127.0.0.1:8000/ingest/batch
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/health/service/{service}` | Composite 0-1 health score |
+| `GET` | `/health/services` | Fleet-wide health scores for all services |
 | `GET` | `/audit/tail` | Last N audit log entries (`n` query param) |
 
 All sensitive endpoints require header `x-api-key` when `API_KEY_ENABLED=true`.
@@ -185,5 +190,7 @@ All sensitive endpoints require header `x-api-key` when `API_KEY_ENABLED=true`.
 | `AUDIT_LOG_PATH` | `audit.jsonl` | Audit log file path |
 | `RATE_LIMIT_MAX_REQUESTS` | `120` | Max requests per window per client IP |
 | `RATE_LIMIT_WINDOW_SEC` | `60` | Rate-limit rolling window in seconds |
+| `CORS_ORIGINS` | _(empty)_ | Comma-separated browser origins |
+| `APP_VERSION` | `2.2.0` | API semver exposed at `/version` |
 
 ## Sharan G S

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import secrets
+
 from fastapi import Header, HTTPException, status
 
 from app.config import settings
@@ -18,7 +20,7 @@ def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
             detail="API key protection is enabled but API_KEY is not configured",
         )
 
-    if x_api_key != settings.api_key:
+    if not secrets.compare_digest(x_api_key or "", settings.api_key):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized",

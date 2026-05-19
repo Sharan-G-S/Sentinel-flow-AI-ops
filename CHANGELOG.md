@@ -8,6 +8,51 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2.2.0] – 2026-05-19
+
+### Added
+- **Readiness probe** (`GET /health/ready`) — reports SQLite connectivity for
+  Kubernetes/Docker orchestration.
+- **Alert count endpoint** (`GET /alerts/count`) — returns total stored events
+  with optional `service` and `severity` filters.
+- **CORS support** — enable browser clients via comma-separated `CORS_ORIGINS`.
+- **SQLite service index** — speeds up per-service alert and analytics queries.
+
+### Fixed
+- WebSocket API-key validation now strips whitespace and uses timing-safe compare.
+- Telemetry `service` and `metric_name` fields are trimmed on ingest.
+- Docker Compose healthcheck targets `/health/ready` instead of liveness only.
+
+### Changed
+- Dashboard caption shows live API version from `GET /version`.
+- Default app version bumped to `2.2.0`.
+
+## [2.1.0] – 2026-05-16
+
+### Added
+- **Fleet health overview** (`GET /health/services`) — returns composite 0–1
+  health scores for every service seen in SQLite storage.
+- **CSV alert export** (`GET /alerts/export`) — download up to 5 000 recent
+  alert records as a CSV attachment for offline analysis.
+- **Severity filter** on `GET /alerts/recent` — optional `severity` query
+  param narrows the timeline to a single severity band.
+- **Request timing middleware** — every HTTP response includes an
+  `X-Response-Time-Ms` header for latency debugging.
+- **Version endpoint** (`GET /version`) — returns app name, semver, and Python
+  runtime version without authentication.
+- **Audit log retention** — automatically prunes `audit.jsonl` when entry
+  count exceeds `AUDIT_RETENTION_MAX_LINES` (default 10 000).
+- **Simulator spike tuning** — `SIM_SPIKE_PROBABILITY` env controls how
+  often the simulator injects metric spikes.
+- **Dashboard panels** — Streamlit UI now surfaces circuit-breaker state and
+  per-service health score with recommendations.
+
+### Changed
+- FastAPI app version bumped to `2.1.0`; configurable via `APP_VERSION` env.
+- `app/config.py` centralises `AUDIT_LOG_PATH`, `AUDIT_RETENTION_MAX_LINES`,
+  `APP_VERSION`, and `LOG_LEVEL` settings.
+- `app/services/audit.py` reads audit path from `Settings` instead of raw env.
+
 ## [2.0.0] – 2026-04-27
 
 ### Added

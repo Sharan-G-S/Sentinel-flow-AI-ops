@@ -29,7 +29,7 @@ class SlidingWindowRateLimiter(BaseHTTPMiddleware):
         super().__init__(app)
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self.protected_paths = ("/ingest",)
+        self.protected_paths = ("/ingest", "/ingest/batch")
         self._windows: dict[str, list[float]] = defaultdict(list)
         self._lock = Lock()
 

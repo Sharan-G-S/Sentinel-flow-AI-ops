@@ -1,14 +1,25 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class TelemetryEvent(BaseModel):
-    service: str = Field(..., description="Microservice name")
-    metric_name: str
+    service: str = Field(..., description="Microservice name", min_length=1)
+    metric_name: str = Field(..., min_length=1)
     metric_value: float
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utc_now)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("service", "metric_name", mode="before")
+    @classmethod
+    def strip_whitespace(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
 
 class AgentDecision(BaseModel):
@@ -113,6 +124,11 @@ class ServiceHealthScore(BaseModel):
     recommendation: str
 
 
+class ServiceHealthList(BaseModel):
+    services: List[ServiceHealthScore]
+    total: int
+
+
 # ---------------------------------------------------------------------------
 # Audit
 # ---------------------------------------------------------------------------
@@ -137,3 +153,21 @@ class CircuitBreakerStatus(BaseModel):
     failure_count: int
     failure_threshold: int
     recovery_timeout_seconds: float
+
+
+class VersionInfo(BaseModel):
+    name: str
+    version: str
+    python: str
+
+
+class ReadinessResponse(BaseModel):
+    status: str
+    database: str
+    utc_time: str
+
+
+class AlertCountResponse(BaseModel):
+    total: int
+    service: str | None = None
+    severity: str | None = None

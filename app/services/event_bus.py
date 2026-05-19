@@ -102,6 +102,7 @@ class RealtimeHub:
 
     def reset_analytics(self) -> None:
         self.recent_events.clear()
+        self.metric_windows.clear()
         self.total_events = 0
         self.emitted_events = 0
         self.suppressed_events = 0

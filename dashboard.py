@@ -8,13 +8,17 @@ import websocket
 import threading
 
 
-WS_URL = "ws://127.0.0.1:8000/ws/decisions"
-API_URL = "http://127.0.0.1:8000"
+_API_HOST = os.getenv("API_HOST", "127.0.0.1")
+_API_PORT = os.getenv("API_PORT", os.getenv("PORT", "8000"))
+API_URL = os.getenv("API_URL", f"http://{_API_HOST}:{_API_PORT}")
+WS_URL = os.getenv(
+    "WS_URL",
+    API_URL.replace("https://", "wss://").replace("http://", "ws://") + "/ws/decisions",
+)
 API_KEY = os.getenv("API_KEY", "")
 
 st.set_page_config(page_title="Realtime Agentic Ops Dashboard", layout="wide")
 st.title("Realtime Agentic Ops Dashboard")
-st.caption("Live incident triage from LangGraph + LangChain + PyTorch + TensorFlow")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -30,6 +34,13 @@ def fetch_json(path: str) -> dict:
         return response.json()
     except Exception:
         return {}
+
+
+_version = fetch_json("/version")
+st.caption(
+    "Live incident triage from LangGraph + LangChain + PyTorch + TensorFlow"
+    + (f" · API v{_version['version']}" if _version.get("version") else "")
+)
 
 
 def on_message(_, message):
@@ -74,7 +85,19 @@ if system_status:
         f"Connected clients: {system_status.get('connected_clients', 0)}"
     )
 
+cb_status = fetch_json("/system/circuit-breaker")
+if cb_status:
+    cb_col1, cb_col2 = st.columns(2)
+    cb_col1.metric("Circuit Breaker", cb_status.get("state", "unknown").upper())
+    cb_col2.metric("LLM Failures", cb_status.get("failure_count", 0))
+
 service_input = st.text_input("Service drilldown", value="payments")
+health_data = fetch_json(f"/health/service/{service_input}")
+if health_data:
+    h1, h2, h3 = st.columns(3)
+    h1.metric("Health Score", f"{health_data.get('health_score', 0):.2f}")
+    h2.metric("Risk Trend", health_data.get("risk_trend", "n/a"))
+    h3.caption(health_data.get("recommendation", ""))
 service_analytics = fetch_json(f"/analytics/service/{service_input}")
 if service_analytics:
     st.caption(
