@@ -8,6 +8,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2.2.0] – 2026-05-19
+
+### Added
+- **Readiness probe** (`GET /health/ready`) — reports SQLite connectivity for
+  Kubernetes/Docker orchestration.
+- **Alert count endpoint** (`GET /alerts/count`) — returns total stored events
+  with optional `service` and `severity` filters.
+- **CORS support** — enable browser clients via comma-separated `CORS_ORIGINS`.
+- **SQLite service index** — speeds up per-service alert and analytics queries.
+
+### Fixed
+- WebSocket API-key validation now strips whitespace and uses timing-safe compare.
+- Telemetry `service` and `metric_name` fields are trimmed on ingest.
+- Docker Compose healthcheck targets `/health/ready` instead of liveness only.
+
+### Changed
+- Dashboard caption shows live API version from `GET /version`.
+- Default app version bumped to `2.2.0`.
+
 ## [2.1.0] – 2026-05-16
 
 ### Added
