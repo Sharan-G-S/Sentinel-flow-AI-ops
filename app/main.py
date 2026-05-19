@@ -23,6 +23,8 @@ from app.schemas import (
     AuditTailResponse,
     CircuitBreakerStatus,
     VersionInfo,
+    ReadinessResponse,
+    AlertCountResponse,
 )
 from app.models.tf_anomaly import TensorFlowAnomalyDetector
 from app.models.pytorch_risk import PyTorchRiskModel
@@ -138,6 +140,16 @@ def health():
     }
 
 
+@app.get("/health/ready", response_model=ReadinessResponse)
+def readiness():
+    db_ok = storage.ping()
+    return ReadinessResponse(
+        status="ready" if db_ok else "degraded",
+        database="ok" if db_ok else "unavailable",
+        utc_time=datetime.now(timezone.utc).isoformat(),
+    )
+
+
 @app.get("/version", response_model=VersionInfo)
 def version_info():
     import sys
@@ -169,6 +181,16 @@ def system_status(_: None = Depends(require_api_key)):
         connected_clients=len(hub.clients),
         total_events=hub.total_events,
     )
+
+
+@app.get("/alerts/count", response_model=AlertCountResponse)
+def alert_count(
+    service: str | None = Query(default=None),
+    severity: str | None = Query(default=None),
+    _: None = Depends(require_api_key),
+):
+    total = storage.count_events(service=service, severity=severity)
+    return AlertCountResponse(total=total, service=service, severity=severity)
 
 
 @app.get("/alerts/export", include_in_schema=True)
