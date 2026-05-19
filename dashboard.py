@@ -19,7 +19,6 @@ API_KEY = os.getenv("API_KEY", "")
 
 st.set_page_config(page_title="Realtime Agentic Ops Dashboard", layout="wide")
 st.title("Realtime Agentic Ops Dashboard")
-st.caption("Live incident triage from LangGraph + LangChain + PyTorch + TensorFlow")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -35,6 +34,13 @@ def fetch_json(path: str) -> dict:
         return response.json()
     except Exception:
         return {}
+
+
+_version = fetch_json("/version")
+st.caption(
+    "Live incident triage from LangGraph + LangChain + PyTorch + TensorFlow"
+    + (f" · API v{_version['version']}" if _version.get("version") else "")
+)
 
 
 def on_message(_, message):
