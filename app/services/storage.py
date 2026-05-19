@@ -191,6 +191,34 @@ class SQLiteStorage:
             writer.writerow({**row, "emitted": int(row["emitted"])})
         return buffer.getvalue()
 
+    def ping(self) -> bool:
+        try:
+            with self._lock:
+                self._conn.execute("SELECT 1").fetchone()
+            return True
+        except sqlite3.Error:
+            return False
+
+    def count_events(
+        self,
+        service: str | None = None,
+        severity: str | None = None,
+    ) -> int:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if service:
+            clauses.append("service = ?")
+            params.append(service)
+        if severity:
+            clauses.append("LOWER(severity) = LOWER(?)")
+            params.append(severity)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._lock:
+            row = self._conn.execute(
+                f"SELECT COUNT(*) AS total FROM events {where}", tuple(params)
+            ).fetchone()
+        return int(row["total"])
+
     def list_distinct_services(self) -> list[str]:
         with self._lock:
             rows = self._conn.execute(
