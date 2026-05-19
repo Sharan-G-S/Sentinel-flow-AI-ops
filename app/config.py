@@ -28,6 +28,7 @@ class Settings(BaseModel):
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     rate_limit_max_requests: int = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "120"))
     rate_limit_window_sec: int = int(os.getenv("RATE_LIMIT_WINDOW_SEC", "60"))
+    cors_origins: str = os.getenv("CORS_ORIGINS", "")
 
 
 settings = Settings()
