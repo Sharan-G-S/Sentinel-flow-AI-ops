@@ -35,6 +35,9 @@ class SQLiteStorage:
                 )
                 """
             )
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_events_service ON events (service)"
+            )
             self._conn.commit()
 
     def insert_event(self, entry: dict[str, Any]) -> None:
