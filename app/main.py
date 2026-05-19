@@ -6,6 +6,7 @@ import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import Depends, FastAPI, Request, WebSocket, WebSocketDisconnect, Query, status
+from fastapi.middleware.cors import CORSMiddleware
 from app.schemas import (
     TelemetryEvent,
     InferenceResponse,
@@ -55,6 +56,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="SentinelFlow-AIOps", version=settings.app_version, lifespan=lifespan)
+if settings.cors_origins:
+    _origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 app.add_middleware(RequestTimingMiddleware)
 app.add_middleware(CorrelationIDMiddleware)
 app.add_middleware(
